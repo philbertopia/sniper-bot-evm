@@ -1,0 +1,307 @@
+https://www.youtube.com/watch?v=v7Y7F60YdFQ
+Crypto Sniping Bot, step-by-step coding tutorial
+1:16:22
+1:32:05
+completed
+
+// ORIGIONAL CODE
+const fs = require("fs");
+const { WebSocketProvider, Contract, Wallet } = require('ethers');
+require("dotenv").config();
+const blockchain = require("./blockchain.json");
+
+const provider = new WebSocketProvider(process.env.LOCAL_RPC_URL_WS);
+const wallet = Wallet.fromPhrase(process.env.MNEMONIC, provider);
+const factory = new Contract(
+    blockchain.factoryAddress,
+    blockchain.factoryAbi,
+    provider
+);
+
+const router = new Contract(
+    blockchain.routerAddress,
+    blockchain.routerAbi,
+    wallet
+);
+
+const SNIPE_LIST_FILE = "snipList.csv";
+const TOKEN_LIST_FILE = "tokenList.csv";
+
+const init = () => {
+    // Event listener for new liquidity pool
+    factory.on("PairCreated", (token0, token1, pairAddress) => {
+        console.log(
+            New pair detected
+            =================
+            pairAddress: ${pairAddress}
+            token0: ${token0}
+            token1: ${token1}    
+        );
+        // save this info in a file
+        if(token0 !== blockchain.WETHAddress && token1 !== blockchain.WETHAddress) return;
+        const t0 = token0 === blockchain.WETHAddress ? token0 : token1;
+        const t1 = token1 === blockchain.WETHAddress ? token1 : token0;
+        fs.appendFileSync(SNIPE_LIST_FILE, ${pairAddress},${t0},${t1}\n);
+
+        //Send email to yourself API
+        //Send the info to a googlesheet
+    });
+};
+
+// Sniping mechanism
+const snipe = async() => {
+    console.log("Snipe loop");
+    let snipeList = fs.readFileSync(SNIPE_LIST_FILE);
+    snipeList = snipeList
+        .toString
+        .split("\n")
+        .filter(snipe => snipe !== "");
+    if(snipeList.length === 0) return;
+    for(const snipe of snipeList) {
+        const [pairAddress, wethAddress, tokenAddress] = snipe.split(",");
+        console.log(Trying to snipe ${tokenAddress} on ${pairAddress});
+
+        const pair = new Contract(
+            pairAddress,
+            blockchain.pairAbi,
+            wallet
+        );
+
+        // If there is no liquidity
+        const totalSupply = await pair.totalSupply(); // LP *(Liquidity Provider)
+        if(totalSupply === 0n) {
+            console.log("Pool is empty, snipe is cancelled");
+            continue;
+        }
+
+        // There is some liquidity, lets do our sniping!
+        const tokenIn = wethAddress;
+        const tokenOut = tokenAddress;
+
+        // We buy 0.1 ETH of new token
+        const amountIn = parseEther("0.1");
+        const amounts = await router.getAmountsOut(amountIn, [tokenIn, tokenOut]);
+        //Define our price tolerance
+        const amountOutMin = amounts[1] - amount[1] * 5n / 100n;
+        console.log(
+            Buying new token
+            ================
+            tokenIn: ${amountIn.toString()} ${tokenIn} (WETH)
+            tokenOut: ${amountOut.toString()} ${tokenOut}
+        );
+        const tx = router.swapExactTokensForTokens(
+            amountIn,
+            amountOutMin,
+            [tokenIn, tokenOut],
+            blockchain.recipient,
+            Date.now() + 1000 * + 60 * 10 //10minutes from now
+        );
+        const receipt = await tx.wait();
+        console.log(Transaction receipt: ${receipt});
+
+        // 1:42:51
+        // const tx = router.swapExactTokensForTokens(
+        //     amountIn,
+        //     amountOutMin,
+        //     [tokenIn, tokenOut],
+        //     blockchain.recipient,
+        //     Date.now() + 1000 * + 60 * 10 //10minutes from now
+        // );
+
+        // How to calculate the price token was purchased at
+        // const balanceWethBefore //weth = new Contract() balanceOf()
+        // const balanceWethAfter
+        // const balanceTokenAfter
+        // const price = balanceTokenAfter / (balanceWethBefore - balanceWethAfter)
+
+        if(receipt.status === "1") {
+            //1. add it to list of token bought
+            fs.appendFileSync(TOKEN_LIST_FILE, ${receipt.blockNumber},${wethAddress},${tokenAddress},${amountOutMin / amountIn}\n);
+            //2. remove from snipelist
+
+        }
+    }
+};
+
+const managePosition = async () => {
+    //1. Stop loss
+    //2. Take profit
+
+} 
+
+const timeout = ms => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+};
+
+const main = async () => {
+    console.log("Trading bot listening for new pairs on Uniswap v2...");
+    init();
+    while(true) {
+        console.log("Heartbeat")
+        // await snipe();
+        // await managePosition();
+        await timeout(3000);
+    }
+}
+
+main();
+
+
+
+1. Liquidity and Liquidity Locks
+Initial Liquidity: Traders want to see whether there’s a significant amount of liquidity added to the token. Low liquidity can mean high volatility, making it easy to lose money with slippage or sudden price changes.
+Liquidity Lock: If the liquidity is locked, it’s considered safer since it prevents developers from pulling out the liquidity pool (commonly referred to as a "rug pull"). Tools like Unicrypt or Team Finance are often used to lock liquidity, and snipers will check this information before buying.
+2. Burned Liquidity
+Memecoin traders often favor tokens where liquidity has been burned. This means the liquidity tokens have been permanently removed, ensuring liquidity stays in the pool and reducing the risk of developers withdrawing it.
+3. Token Contract and Developer’s Wallet
+Contract Audit: Some memecoin traders look for tokens with contract audits from platforms like Certik or SolidProof, although for fast-paced sniping, this is less common.
+Ownership Renounced: If a token's ownership is renounced, the developer no longer has control over the smart contract, reducing the risk of malicious actions like changing transaction fees or minting new tokens.
+Whale Watching: Traders often check whether large wallets (whales) own a significant portion of the token supply. This is a red flag because whales can dump the price at any time.
+4. Slippage and Transaction Fees
+Slippage Tolerance: Memecoin traders check the slippage tolerance required to buy a token. Tokens with higher transaction fees (like those with "reflection" or burn mechanics) might require slippage as high as 10-12%, which can eat into profits.
+Gas Fees: Since sniping involves acting fast, traders watch Ethereum gas fees closely. High gas fees could make small trades unprofitable, especially during periods of network congestion.
+5. Honeypot Detection
+A honeypot is a malicious token where you can buy but not sell. Memecoin snipers use tools like Honeypot.is to test whether a token is sellable before investing. They avoid coins that restrict selling.
+6. Pre-Sale and Fair Launches
+Pre-Sale Participation: Some traders look for tokens that had a public pre-sale (typically through platforms like DXSale) as it often indicates early liquidity but can also bring sell pressure from pre-sale buyers.
+Fair Launch: A "fair launch" means that everyone has the same opportunity to buy once liquidity is added, without any private pre-sales. Many snipers prefer these because it reduces early whale dominance.
+7. Timing and Bots
+Speed of Transactions: Sniping memecoins is all about speed. Traders often use bots to be the first to buy tokens as soon as liquidity is added or a contract is deployed. In these cases, milliseconds count.
+Contract Monitoring: Tools like DexTools or ETHplorer are used to monitor new token contract creations in real-time. Sniping bots often listen for the "PairCreated" event (like in your bot) to act instantly when liquidity is provided.
+8. Community and Hype
+Social Media Buzz: Memecoins often depend on strong community backing or viral hype on platforms like Twitter, Telegram, and Reddit. Traders follow trending tokens to ride the wave of buying momentum.
+Influencers and Shills: If a token is being pushed by influencers, this can create buying pressure, but it’s also a double-edged sword because these influencers often sell quickly once their followers have bought in.
+9. Tokenomics
+Burns and Reflections: Many memecoins have unique tokenomics like auto burns or reflections (where holders get a percentage of each transaction). These mechanics can encourage holding but also make buying more expensive due to higher slippage.
+Max Transaction Limits: Some memecoins impose limits on the maximum number of tokens you can buy or sell in one transaction, which can prevent bots or whales from dumping but also affect sniper strategies.
+10. Rug Pull Detection
+Contract Ownership: If the contract’s ownership isn’t renounced, the developer could change the code and rug pull. Snipers will use tools to check whether ownership has been renounced or if there are dangerous functions that the developer can still access.
+Token Supply: Traders look at whether the supply is fixed or can be inflated by the developer. A fixed supply is generally preferred for memecoins.
+
+
+# TELEGRAM NOTIFICATION
+To send notifications to Telegram from your trading bot, you will need to use the Telegram Bot API. First, you’ll need to create a Telegram bot and get its API token, as well as your chat ID where the messages will be sent. Here’s how you can implement that in your code:
+
+Step 1: Create a Telegram Bot
+Open Telegram and search for the BotFather.
+Start a chat and use the command /newbot to create a new bot.
+Follow the prompts to get your bot's API token.
+Step 2: Get Your Chat ID
+Start a chat with your bot (search for your bot by its name).
+Send any message to your bot.
+Go to this URL in your browser (replace YOUR_BOT_TOKEN with your bot's API token):
+bash
+Copy code
+https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates
+Look for "chat":{"id": in the JSON response to find your chat ID.
+Step 3: Update Your Code
+Install the axios library for making HTTP requests if you haven't already:
+
+bash
+Copy code
+npm install axios
+Update your trading bot code to include Telegram notifications. Below are the changes to be made:
+
+javascript
+Copy code
+const fs = require("fs");
+const { WebSocketProvider, Contract, Wallet, ethers } = require('ethers');
+const axios = require("axios");
+require("dotenv").config();
+const blockchain = require("./blockchain.json");
+
+const provider = new WebSocketProvider(process.env.LOCAL_RPC_URL_WS);
+const wallet = Wallet.fromPhrase(process.env.MNEMONIC, provider);
+const factory = new Contract(
+    blockchain.factoryAddress,
+    blockchain.factoryAbi,
+    provider
+);
+
+const router = new Contract(
+    blockchain.routerAddress,
+    blockchain.routerAbi,
+    wallet
+);
+
+const SNIPE_LIST_FILE = "snipList.csv";
+const TOKEN_LIST_FILE = "tokenList.csv";
+
+const TELEGRAM_API_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+const sendTelegramNotification = async (message) => {
+    try {
+        await axios.post(TELEGRAM_API_URL, {
+            chat_id: CHAT_ID,
+            text: message,
+        });
+        console.log("Notification sent to Telegram");
+    } catch (error) {
+        console.error("Error sending notification to Telegram:", error);
+    }
+};
+
+const init = () => {
+    // Event listener for new liquidity pool
+    factory.on("PairCreated", (token0, token1, pairAddress) => {
+        console.log(`
+            New pair detected
+            =================
+            pairAddress: ${pairAddress}
+            token0: ${token0}
+            token1: ${token1}    
+        `);
+
+        if (token0 !== blockchain.WETHAddress && token1 !== blockchain.WETHAddress) return;
+        const t0 = token0 === blockchain.WETHAddress ? token0 : token1;
+        const t1 = token1 === blockchain.WETHAddress ? token1 : token0;
+        fs.appendFileSync(SNIPE_LIST_FILE, `${pairAddress},${t0},${t1}\n`);
+
+        // Send notification to Telegram
+        const message = `New pair detected: ${pairAddress}\nToken0: ${t0}\nToken1: ${t1}`;
+        sendTelegramNotification(message);
+    });
+};
+
+// Sniping mechanism remains unchanged...
+// Add the rest of your original code here, ensuring that managePosition also sends notifications...
+
+// Take profit implementation
+const takeProfit = async (tokenAddress, purchasePrice, currentPrice) => {
+    console.log(`Taking profit for ${tokenAddress}`);
+    
+    // Notify about take profit
+    await sendTelegramNotification(`Taking profit for token: ${tokenAddress}\nPurchase Price: ${purchasePrice}\nCurrent Price: ${currentPrice}`);
+
+    // Execute selling logic...
+};
+
+// Continue with your managePosition function and rest of your code...
+
+const main = async () => {
+    console.log("Trading bot listening for new pairs on Uniswap v2...");
+    init();
+    while (true) {
+        console.log("Heartbeat...");
+        await snipe();
+        await managePosition();
+        await timeout(3000);
+    }
+};
+
+main();
+Step 4: Update Environment Variables
+Make sure to add your Telegram bot token and chat ID to your .env file:
+
+plaintext
+Copy code
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+Summary of Changes
+The sendTelegramNotification function was created to handle sending messages to your Telegram chat.
+Notifications are sent upon detecting a new pair and when taking profits.
+Make sure you handle the logic in your managePosition function for when to take profits, using the takeProfit function as needed.
+Testing
+Test the functionality to ensure notifications are sent to your Telegram chat when new liquidity pools are detected and when taking profits.
+
