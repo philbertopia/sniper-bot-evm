@@ -1,10 +1,16 @@
+// 
+
 const fs = require("fs");
 const { WebSocketProvider, Contract, Wallet } = require('ethers');
+const { ethers } = require('ethers');
+const { parseEther } = require('ethers'); // Correct import for Ethers.js v6
+
 const axios = require("axios");
 require("dotenv").config();
 const blockchain = require("./blockchain.json");
 
-const provider = new WebSocketProvider(process.env.LOCAL_RPC_URL_WS);
+// const provider = new WebSocketProvider(process.env.LOCAL_RPC_URL_WS);
+const provider = new WebSocketProvider(process.env.MAINNET_RPC_URL_WS);
 const wallet = Wallet.fromPhrase(process.env.MNEMONIC, provider);
 const factory = new Contract(
     blockchain.factoryAddress,
@@ -18,7 +24,7 @@ const router = new Contract(
     wallet
 );
 
-const SNIPE_LIST_FILE = "snipList.csv";
+const SNIPE_LIST_FILE = "snipeList.csv";
 const TOKEN_LIST_FILE = "tokenList.csv";
 
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -47,7 +53,7 @@ const init = () => {
             token1: ${token1}    
         `);
 
-        // save this info in a file
+        // Save this info in a file
         if(token0 !== blockchain.WETHAddress && token1 !== blockchain.WETHAddress) return;
         const t0 = token0 === blockchain.WETHAddress ? token0 : token1;
         const t1 = token1 === blockchain.WETHAddress ? token1 : token0;
@@ -67,14 +73,18 @@ const init = () => {
 
 // Sniping mechanism
 const snipe = async() => {
-    console.log("Snipe loop");
-    let snipeList = fs.readFileSync(SNIPE_LIST_FILE);
-    snipeList = snipeList
-        .toString
-        .split("\n")
-        .filter(snipe => snipe !== "");
+    console.log("Snipe loop...");
 
-    if(snipeList.length === 0) return;
+    // Read and process the snipeList file
+    let snipeList = fs.readFileSync(SNIPE_LIST_FILE);
+
+    // Convert file contents to string and split by line
+    snipeList = snipeList
+        .toString()
+        .split("\n")
+        .filter(snipe => snipe !== ""); // Ensure no empty entries
+
+    if(snipeList.length === 0) return; // If no tokens, exit
 
     for(const snipe of snipeList) {
         const [pairAddress, wethAddress, tokenAddress] = snipe.split(",");
@@ -106,9 +116,10 @@ const snipe = async() => {
         const reserves = await pair.getReserves();
         const wethReserves = reserves[0];  // Assuming WETH is token0
 
-        if (wethReserves < ethers.utils.parseEther("1")) {
+        if (wethReserves < parseEther("1")) {
             console.log("Rug pull alert: Low liquidity in the pool");
-            continue;
+            return;
+            // continue;
         }
 
         //Liquidity Pool Setup, Check if liquidity is sufficient
@@ -168,6 +179,7 @@ const snipe = async() => {
         // Token Sniffer: Scrape Token Sniffer for quick analysis of tokens and any potential red flags (like no liquidity lock).
         // Uniswap Subgraph: Use The Graph’s free subgraph to get liquidity pool data and infer whether liquidity remains locked/stable.
         // Scraping: Use Puppeteer or similar tools to scrape platforms like Mudra Locker, Team Finance, or PooCoin to verify liquidity locks.
+        // Query the sourceCode of contracts using an API like Etherscan to identify hidden methods.
 
 
         // Check for High Transaction Fees
@@ -316,6 +328,7 @@ const managePosition = async () => {
                 }
             }
 
+            // Take Profit
             // Check if current price is above the take-profit price
             if (currentPrice > takeProfitPrice) {
                 console.log(`Executing take profit for ${tokenAddress}`);
