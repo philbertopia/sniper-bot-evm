@@ -1,3 +1,6 @@
+"node bot.js" to start
+
+
 https://www.youtube.com/watch?v=v7Y7F60YdFQ
 Crypto Sniping Bot, step-by-step coding tutorial
 1:16:22
